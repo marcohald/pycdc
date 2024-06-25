@@ -555,8 +555,10 @@ public:
 
     void setEnd(int end) { m_end = end; }
 
-private:
+protected:
     BlkType m_blktype;
+
+private:
     int m_end;
     list_t m_nodes;
 
@@ -575,6 +577,7 @@ public:
                  bool negative = false)
         : ASTBlock(blktype, end), m_cond(std::move(cond)), m_negative(negative) { }
 
+    void inferToWhileLoop() { m_blktype = ASTBlock::BLK_WHILE; }
     PycRef<ASTNode> cond() const { return m_cond; }
     bool negative() const { return m_negative; }
 

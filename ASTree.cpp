@@ -1204,6 +1204,20 @@ PycRef<ASTNode> BuildFromCode(PycRef<PycCode> code, PycModule* mod)
                                 curblock->append(tmp.cast<ASTNode>());
                             }
                         }
+                    } else if (curblock->blktype() == ASTBlock::BLK_IF) {
+                        /* in Python 3.8, SETUP_LOOP was removed for
+                           while loop too. We infer IF conditions to
+                           WHILE blocks when we meet a JUMP_ABSOLUTE */
+                        if (mod->verCompare(3, 8) >= 0)
+                        {
+                            curblock.cast<ASTCondBlock>()->inferToWhileLoop();
+                            stack = stack_hist.top();
+                            stack_hist.pop();
+
+                            blocks.pop();
+                            blocks.top()->append(curblock.cast<ASTNode>());
+                            curblock = blocks.top();
+                        }
                     } else if (curblock->blktype() == ASTBlock::BLK_ELSE) {
                         stack = stack_hist.top();
                         stack_hist.pop();
