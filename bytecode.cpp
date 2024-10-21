@@ -38,6 +38,7 @@ DECLARE_PYTHON(3, 9)
 DECLARE_PYTHON(3, 10)
 DECLARE_PYTHON(3, 11)
 DECLARE_PYTHON(3, 12)
+DECLARE_PYTHON(3, 13)
 
 const char* Pyc::OpcodeName(int opcode)
 {
@@ -107,6 +108,7 @@ int Pyc::ByteToOpcode(int maj, int min, int opcode)
         case 10: return python_3_10_map(opcode);
         case 11: return python_3_11_map(opcode);
         case 12: return python_3_12_map(opcode);
+        case 13: return python_3_13_map(opcode);
         }
         break;
     }
@@ -346,9 +348,14 @@ void bc_disasm(std::ostream& pyc_output, PycRef<PycCode> code, PycModule* mod,
     static const char *intrinsic2_names[] = {
         "INTRINSIC_2_INVALID", "INTRINSIC_PREP_RERAISE_STAR",
         "INTRINSIC_TYPEVAR_WITH_BOUND", "INTRINSIC_TYPEVAR_WITH_CONSTRAINTS",
-        "INTRINSIC_SET_FUNCTION_TYPE_PARAMS",
+        "INTRINSIC_SET_FUNCTION_TYPE_PARAMS", "INTRINSIC_SET_TYPEPARAM_DEFAULT",
     };
     static const size_t intrinsic2_names_len = sizeof(intrinsic2_names) / sizeof(intrinsic2_names[0]);
+
+    static const char *format_value_names[] = {
+        "FVC_NONE", "FVC_STR", "FVC_REPR", "FVC_ASCII",
+    };
+    static const size_t format_value_names_len = sizeof(format_value_names) / sizeof(format_value_names[0]);
 
     PycBuffer source(code->code()->value(), code->code()->length());
 
@@ -436,6 +443,17 @@ void bc_disasm(std::ostream& pyc_output, PycRef<PycCode> code, PycModule* mod,
                     formatted_print(pyc_output, "%d <INVALID>", operand);
                 }
                 break;
+            case Pyc::LOAD_FAST_LOAD_FAST_A:
+            case Pyc::STORE_FAST_LOAD_FAST_A:
+            case Pyc::STORE_FAST_STORE_FAST_A:
+                try {
+                    formatted_print(pyc_output, "%d: %s, %s", operand,
+                                    code->getLocal(operand >> 4)->value(),
+                                    code->getLocal(operand & 0xF)->value());
+                } catch (const std::out_of_range &) {
+                    formatted_print(pyc_output, "%d <INVALID>", operand);
+                }
+                break;
             case Pyc::LOAD_CLOSURE_A:
             case Pyc::LOAD_DEREF_A:
             case Pyc::STORE_DEREF_A:
@@ -513,8 +531,10 @@ void bc_disasm(std::ostream& pyc_output, PycRef<PycCode> code, PycModule* mod,
             case Pyc::COMPARE_OP_A:
                 {
                     auto arg = operand;
-                    if (mod->verCompare(3, 12) >= 0)
+                    if (mod->verCompare(3, 12) == 0)
                         arg >>= 4; // changed under GH-100923
+                    else if (mod->verCompare(3, 13) >= 0)
+                        arg >>= 5;
                     if (static_cast<size_t>(arg) < cmp_strings_len)
                         formatted_print(pyc_output, "%d (%s)", operand, cmp_strings[arg]);
                     else
@@ -548,6 +568,44 @@ void bc_disasm(std::ostream& pyc_output, PycRef<PycCode> code, PycModule* mod,
                     formatted_print(pyc_output, "%d (%s)", operand, intrinsic2_names[operand]);
                 else
                     formatted_print(pyc_output, "%d (UNKNOWN)", operand);
+                break;
+            case Pyc::FORMAT_VALUE_A:
+                {
+                    auto conv = static_cast<size_t>(operand & 0x03);
+                    const char *flag = (operand & 0x04) ? " | FVS_HAVE_SPEC" : "";
+                    if (conv < format_value_names_len) {
+                        formatted_print(pyc_output, "%d (%s%s)", operand,
+                                        format_value_names[conv], flag);
+                    } else {
+                        formatted_print(pyc_output, "%d (UNKNOWN)", operand);
+                    }
+                }
+                break;
+            case Pyc::CONVERT_VALUE_A:
+                if (static_cast<size_t>(operand) < format_value_names_len)
+                    formatted_print(pyc_output, "%d (%s)", operand, format_value_names[operand]);
+                else
+                    formatted_print(pyc_output, "%d (UNKNOWN)", operand);
+                break;
+            case Pyc::SET_FUNCTION_ATTRIBUTE_A:
+                // This looks like a bitmask, but CPython treats it as an exclusive lookup...
+                switch (operand) {
+                case 0x01:
+                    formatted_print(pyc_output, "%d (MAKE_FUNCTION_DEFAULTS)", operand);
+                    break;
+                case 0x02:
+                    formatted_print(pyc_output, "%d (MAKE_FUNCTION_KWDEFAULTS)", operand);
+                    break;
+                case 0x04:
+                    formatted_print(pyc_output, "%d (MAKE_FUNCTION_ANNOTATIONS)", operand);
+                    break;
+                case 0x08:
+                    formatted_print(pyc_output, "%d (MAKE_FUNCTION_CLOSURE)", operand);
+                    break;
+                default:
+                    formatted_print(pyc_output, "%d (UNKNOWN)", operand);
+                    break;
+                }
                 break;
             default:
                 formatted_print(pyc_output, "%d", operand);

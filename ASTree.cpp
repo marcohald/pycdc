@@ -402,7 +402,7 @@ PycRef<ASTNode> BuildFromCode(PycRef<PycCode> code, PycModule* mod)
             {
                 // if class is a closure code, ignore this tuple
                 PycRef<ASTNode> tos = stack.top();
-                if (tos->type() == ASTNode::NODE_LOADBUILDCLASS) {
+                if (tos && tos->type() == ASTNode::NODE_LOADBUILDCLASS) {
                     break;
                 }
 
@@ -651,8 +651,10 @@ PycRef<ASTNode> BuildFromCode(PycRef<PycCode> code, PycModule* mod)
                 PycRef<ASTNode> left = stack.top();
                 stack.pop();
                 auto arg = operand;
-                if (mod->verCompare(3, 12) >= 0)
+                if (mod->verCompare(3, 12) == 0)
                     arg >>= 4; // changed under GH-100923
+                else if (mod->verCompare(3, 13) >= 0)
+                    arg >>= 5;
                 stack.push(new ASTCompare(left, right, arg));
             }
             break;
@@ -986,29 +988,14 @@ PycRef<ASTNode> BuildFromCode(PycRef<PycCode> code, PycModule* mod)
         case Pyc::FORMAT_VALUE_A:
             {
                 auto conversion_flag = static_cast<ASTFormattedValue::ConversionFlag>(operand);
-                switch (conversion_flag) {
-                case ASTFormattedValue::ConversionFlag::NONE:
-                case ASTFormattedValue::ConversionFlag::STR:
-                case ASTFormattedValue::ConversionFlag::REPR:
-                case ASTFormattedValue::ConversionFlag::ASCII:
-                    {
-                        auto val = stack.top();
-                        stack.pop();
-                        stack.push(new ASTFormattedValue(val, conversion_flag, nullptr));
-                    }
-                    break;
-                case ASTFormattedValue::ConversionFlag::FMTSPEC:
-                    {
-                        auto format_spec = stack.top();
-                        stack.pop();
-                        auto val = stack.top();
-                        stack.pop();
-                        stack.push(new ASTFormattedValue(val, conversion_flag, format_spec));
-                    }
-                    break;
-                default:
-                    fprintf(stderr, "Unsupported FORMAT_VALUE_A conversion flag: %d\n", operand);
+                PycRef<ASTNode> format_spec = nullptr;
+                if (conversion_flag & ASTFormattedValue::HAVE_FMT_SPEC) {
+                    format_spec = stack.top();
+                    stack.pop();
                 }
+                auto val = stack.top();
+                stack.pop();
+                stack.push(new ASTFormattedValue(val, conversion_flag, format_spec));
             }
             break;
         case Pyc::GET_AWAITABLE:
@@ -1506,7 +1493,7 @@ PycRef<ASTNode> BuildFromCode(PycRef<PycCode> code, PycModule* mod)
                     if (mod->verCompare(3, 12) >= 0) {
                         if (operand & 1) {
                             /* Changed in version 3.12:
-                            If the low bit of namei is set, then a NULL or self is pushed to the stack
+                            If the low bit of name is set, then a NULL or self is pushed to the stack
                             before the attribute or unbound method respectively. */
                             stack.push(nullptr);
                         }
@@ -1548,6 +1535,10 @@ PycRef<ASTNode> BuildFromCode(PycRef<PycCode> code, PycModule* mod)
                 stack.push(new ASTName(code->getName(operand)));
             else
                 stack.push(new ASTName(code->getLocal(operand)));
+            break;
+        case Pyc::LOAD_FAST_LOAD_FAST_A:
+            stack.push(new ASTName(code->getLocal(operand >> 4)));
+            stack.push(new ASTName(code->getLocal(operand & 0xF)));
             break;
         case Pyc::LOAD_GLOBAL_A:
             if (mod->verCompare(3, 11) >= 0) {
@@ -2578,7 +2569,7 @@ PycRef<ASTNode> BuildFromCode(PycRef<PycCode> code, PycModule* mod)
             }
             break;
         default:
-            fprintf(stderr, "Unsupported opcode: %s\n", Pyc::OpcodeName(opcode & 0xFF));
+            fprintf(stderr, "Unsupported opcode: %s (%d)\n", Pyc::OpcodeName(opcode), opcode);
             cleanBuild = false;
             return new ASTNodeList(defblock->nodes());
         }
@@ -2754,23 +2745,21 @@ void print_formatted_value(PycRef<ASTFormattedValue> formatted_value, PycModule*
     pyc_output << "{";
     print_src(formatted_value->val(), mod, pyc_output);
 
-    switch (formatted_value->conversion()) {
-    case ASTFormattedValue::ConversionFlag::NONE:
+    switch (formatted_value->conversion() & ASTFormattedValue::CONVERSION_MASK) {
+    case ASTFormattedValue::NONE:
         break;
-    case ASTFormattedValue::ConversionFlag::STR:
+    case ASTFormattedValue::STR:
         pyc_output << "!s";
         break;
-    case ASTFormattedValue::ConversionFlag::REPR:
+    case ASTFormattedValue::REPR:
         pyc_output << "!r";
         break;
-    case ASTFormattedValue::ConversionFlag::ASCII:
+    case ASTFormattedValue::ASCII:
         pyc_output << "!a";
         break;
-    case ASTFormattedValue::ConversionFlag::FMTSPEC:
+    }
+    if (formatted_value->conversion() & ASTFormattedValue::HAVE_FMT_SPEC) {
         pyc_output << ":" << formatted_value->format_spec().cast<ASTObject>()->object().cast<PycString>()->value();
-        break;
-    default:
-        fprintf(stderr, "Unsupported NODE_FORMATTEDVALUE conversion flag: %d\n", formatted_value->conversion());
     }
     pyc_output << "}";
 }

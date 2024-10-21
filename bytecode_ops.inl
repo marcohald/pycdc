@@ -118,6 +118,11 @@ OPCODE(RESERVED)                        // Python 3.12 ->
 OPCODE(BINARY_SLICE)                    // Python 3.12 ->
 OPCODE(STORE_SLICE)                     // Python 3.12 ->
 OPCODE(CLEANUP_THROW)                   // Python 3.12 ->
+OPCODE(EXIT_INIT_CHECK)                 // Python 3.13 ->
+OPCODE(FORMAT_SIMPLE)                   // Python 3.13 ->
+OPCODE(FORMAT_WITH_SPEC)                // Python 3.13 ->
+OPCODE(MAKE_FUNCTION)                   // Python 3.13 ->
+OPCODE(TO_BOOL)                         // Python 3.13 ->
 
 /* Has parameter word */
 OPCODE_A_FIRST(STORE_NAME)              // Python 1.0 ->                names[A]
@@ -136,8 +141,11 @@ OPCODE_A(LOAD_NAME)                     // Python 1.0 ->                names[A]
 OPCODE_A(BUILD_TUPLE)                   // Python 1.0 ->                A=size
 OPCODE_A(BUILD_LIST)                    // Python 1.0 ->                A=size
 OPCODE_A(BUILD_MAP)                     // Python 1.0 ->                A=size
-OPCODE_A(LOAD_ATTR)                     // Python 1.0 ->                names[A]
-OPCODE_A(COMPARE_OP)                    // Python 1.0 ->                cmp_ops[A]
+OPCODE_A(LOAD_ATTR)                     // Python 1.0 - 3.11            names[A]
+                                        // Python 3.12 ->               A=(names[A<<1])+(flag)
+OPCODE_A(COMPARE_OP)                    // Python 1.0 - 3.11            cmp_ops[A]
+                                        // Python 3.12                  A=(cmp_ops[A<<4])+(flags)
+                                        // Python 3.13 ->               A=(cmp_ops[A<<5])+(flags)
 OPCODE_A(IMPORT_NAME)                   // Python 1.0 ->                names[A]
 OPCODE_A(IMPORT_FROM)                   // Python 1.0 ->                names[A]
 OPCODE_A(ACCESS_MODE)                   // Python 1.0 - 1.4             names[A]
@@ -147,7 +155,8 @@ OPCODE_A(JUMP_IF_TRUE)                  // Python 1.0 - 2.6, 3.0        rel jmp 
 OPCODE_A(JUMP_ABSOLUTE)                 // Python 1.0 - 3.10            abs jmp A
 OPCODE_A(FOR_LOOP)                      // Python 1.0 - 2.2             rel jmp +A
 OPCODE_A(LOAD_LOCAL)                    // Python 1.0 - 1.4             names[A]
-OPCODE_A(LOAD_GLOBAL)                   // Python 1.0 ->                names[A]
+OPCODE_A(LOAD_GLOBAL)                   // Python 1.0 - 3.10            names[A]
+                                        // Python 3.11 ->               A=(names[A<<1])+(flag)
 OPCODE_A(SET_FUNC_ARGS)                 // Python 1.1 - 1.4             A=count
 OPCODE_A(SETUP_LOOP)                    // Python 1.0 - 3.7             rel jmp +A
 OPCODE_A(SETUP_EXCEPT)                  // Python 1.0 - 3.7             rel jmp +A
@@ -164,7 +173,7 @@ OPCODE_A(CALL_FUNCTION)                 // Python 1.3 - 3.5             A=(#args
                                         // Python 3.6 - 3.10            A=#args
 OPCODE_A(MAKE_FUNCTION)                 // Python 1.3 - 2.7             A=#defaults
                                         // Python 3.0 - 3.5             A=(#defaults)+(#kwdefaults<<8)+(#annotations<<16)
-                                        // Python 3.6 ->                A=flags
+                                        // Python 3.6 - 3.12            A=flags
 OPCODE_A(BUILD_SLICE)                   // Python 1.4 ->                A=count
 OPCODE_A(CALL_FUNCTION_VAR)             // Python 1.6 - 3.5             A=(#args)+(#kwargs<<8)
 OPCODE_A(CALL_FUNCTION_KW)              // Python 1.6 - 3.5             A=(#args)+(#kwargs<<8)
@@ -204,7 +213,7 @@ OPCODE_A(BUILD_MAP_UNPACK_WITH_CALL)    // Python 3.5                   A=(count
 OPCODE_A(BUILD_TUPLE_UNPACK)            // Python 3.5 - 3.8             A=count
 OPCODE_A(BUILD_SET_UNPACK)              // Python 3.5 - 3.8             A=count
 OPCODE_A(SETUP_ASYNC_WITH)              // Python 3.5 - 3.10            rel jmp +A
-OPCODE_A(FORMAT_VALUE)                  // Python 3.6 ->                A=conversion_type
+OPCODE_A(FORMAT_VALUE)                  // Python 3.6 - 3.12            A=(conversion_type&0x3)+(flags)
 OPCODE_A(BUILD_CONST_KEY_MAP)           // Python 3.6 ->                A=count
 OPCODE_A(BUILD_STRING)                  // Python 3.6 ->                A=count
 OPCODE_A(BUILD_TUPLE_UNPACK_WITH_CALL)  // Python 3.6 - 3.8             A=count
@@ -214,7 +223,7 @@ OPCODE_A(CALL_FINALLY)                  // Python 3.8                   rel jmp 
 OPCODE_A(POP_FINALLY)                   // Python 3.8                   A=flags
 OPCODE_A(IS_OP)                         // Python 3.9 ->                A=inverted
 OPCODE_A(CONTAINS_OP)                   // Python 3.9 ->                A=inverted
-OPCODE_A(RERAISE)                       // Python 3.10 ->               A=flag
+OPCODE_A(RERAISE)                       // Python 3.10 ->               A=count
 OPCODE_A(JUMP_IF_NOT_EXC_MATCH)         // Python 3.9 - 3.10            abs jmp A
 OPCODE_A(LIST_EXTEND)                   // Python 3.9 ->                stack[A]
 OPCODE_A(SET_UPDATE)                    // Python 3.9 ->                stack[A]
@@ -236,7 +245,7 @@ OPCODE_A(COPY_FREE_VARS)                // Python 3.11 ->               A=count
 OPCODE_A(RESUME)                        // Python 3.11 ->               ???
 OPCODE_A(PRECALL)                       // Python 3.11                  A=#args
 OPCODE_A(CALL)                          // Python 3.11 ->               A=#args
-OPCODE_A(KW_NAMES)                      // Python 3.11 ->               consts[A]
+OPCODE_A(KW_NAMES)                      // Python 3.11 - 3.12           consts[A]
 OPCODE_A(POP_JUMP_BACKWARD_IF_NOT_NONE) // Python 3.11                  jmp rel -A
 OPCODE_A(POP_JUMP_BACKWARD_IF_NONE)     // Python 3.11                  jmp rel -A
 OPCODE_A(POP_JUMP_BACKWARD_IF_FALSE)    // Python 3.11                  jmp rel -A
@@ -247,11 +256,19 @@ OPCODE_A(POP_JUMP_IF_NOT_NONE)          // Python 3.12 ->               rel jmp 
 OPCODE_A(POP_JUMP_IF_NONE)              // Python 3.12 ->               rel jmp +A
 OPCODE_A(LOAD_SUPER_ATTR)               // Python 3.12 ->               A=(flags&0x3)+names[A<<2]
 OPCODE_A(LOAD_FAST_AND_CLEAR)           // Python 3.12 ->               locals[A]
-OPCODE_A(YIELD_VALUE)                   // Python 3.12 ->               ???
+OPCODE_A(YIELD_VALUE)                   // Python 3.12                  A=stack_depth (ignored)
+                                        // Python 3.13 ->               A=type
 OPCODE_A(CALL_INTRINSIC_1)              // Python 3.12 ->               intrinsics_1[A]
 OPCODE_A(CALL_INTRINSIC_2)              // Python 3.12 ->               intrinsics_2[A]
 OPCODE_A(LOAD_FROM_DICT_OR_GLOBALS)     // Python 3.12 ->               names[A]
 OPCODE_A(LOAD_FROM_DICT_OR_DEREF)       // Python 3.12 ->               localsplusnames[A]
+OPCODE_A(CALL_KW)                       // Python 3.13 ->               A=#args
+OPCODE_A(CONVERT_VALUE)                 // Python 3.13 ->               A=conversion_type
+OPCODE_A(ENTER_EXECUTOR)                // Python 3.13 ->               executors[A&0xff]
+OPCODE_A(LOAD_FAST_LOAD_FAST)           // Python 3.13 ->               A=locals[A<<4]+locals[A&0xf]
+OPCODE_A(SET_FUNCTION_ATTRIBUTE)        // Python 3.13 ->               A=attribute_type
+OPCODE_A(STORE_FAST_LOAD_FAST)          // Python 3.13 ->               A=locals[A<<4]+locals[A&0xf]
+OPCODE_A(STORE_FAST_STORE_FAST)         // Python 3.13 ->               A=locals[A<<4]+locals[A&0xf]
 
 /* Instrumented opcodes */
 OPCODE_A(INSTRUMENTED_LOAD_SUPER_ATTR)      // Python 3.12 ->           (see LOAD_SUPER_ATTR)
@@ -270,5 +287,6 @@ OPCODE_A(INSTRUMENTED_POP_JUMP_IF_FALSE)    // Python 3.12 ->           (see POP
 OPCODE_A(INSTRUMENTED_POP_JUMP_IF_TRUE)     // Python 3.12 ->           (see POP_JUMP_IF_TRUE)
 OPCODE_A(INSTRUMENTED_END_FOR)              // Python 3.12 ->           (see END_FOR)
 OPCODE_A(INSTRUMENTED_END_SEND)             // Python 3.12 ->           (see END_SEND)
-OPCODE_A(INSTRUMENTED_INSTRUCTION)          // Python 3.12 ->           ???
+OPCODE_A(INSTRUMENTED_INSTRUCTION)          // Python 3.12 ->           A=(unused)
 OPCODE_A(INSTRUMENTED_LINE)                 // Python 3.12 ->           ???
+OPCODE_A(INSTRUMENTED_CALL_KW)              // Python 3.13 ->           (see CALL_KW)
